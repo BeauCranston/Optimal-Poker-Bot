@@ -47,7 +47,7 @@ public class PokerTournament {
          *  Add your player here, it must be in the same package.
          */
 
-        //players.add( new pokerPlayer( "Your bot", stake ) );
+        players.add( new OptimalBot( "Your bot", stake ) );
         players.add( new randBot( "Randy McRandom", stake ) );
         players.add( new foldBot( "Fearless Folder", stake ) );
         players.add( new callBot( "Casual Caller", stake ) );
@@ -174,7 +174,7 @@ public class PokerTournament {
                             case HOLE: gamePhase = Phases.FLOP;     break;
                             case FLOP: gamePhase = Phases.RIVER;    break;
                             case RIVER:gamePhase = Phases.TURN;     break;
-                            case TURN: gamePhase = Phases.REVEAL; break;
+                            case TURN: gamePhase = Phases.REVEAL;   break;
                             default:
                                 debugWrite( "Invalid state change after burning card detected." );
                         }

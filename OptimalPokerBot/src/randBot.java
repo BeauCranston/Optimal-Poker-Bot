@@ -66,6 +66,12 @@ public class randBot extends pokerPlayer {
     @Override
     public int betAmount() {
         SecureRandom rnd = new SecureRandom();
-        return rnd.nextInt(chipTotal);
+        if(chipTotal > 0){
+            return rnd.nextInt(chipTotal);
+        }
+        else{
+            return 0;
+        }
+
     }
 }

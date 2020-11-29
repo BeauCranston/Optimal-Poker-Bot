@@ -29,6 +29,7 @@ public class callBot extends pokerPlayer {
         Pattern startPat = Pattern.compile( "^Starting hand \\d+, please ante up\\.$" );
         Pattern flopPat = Pattern.compile( "^.*Dealer shows (.)(.) (.)(.) (.)(.).*$", Pattern.DOTALL );
         Pattern riverTurnPat = Pattern.compile( "^.*Dealer shows (.)(.).*$", Pattern.DOTALL );
+
         Matcher matcher;
         
         // Sample response, you can also call your own processing
