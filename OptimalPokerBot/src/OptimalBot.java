@@ -10,8 +10,10 @@ public class OptimalBot extends pokerPlayer {
     private double callRate;
     private double raiseRate;
     private int handsPlayed;
+    private List<String[]> currentHand;
     private int currentPot;
     private int currentBetAmount;
+    private double currentHandRank;
     private ArrayList<Opponent> opponents = new ArrayList<>();
     //order is important
     enum NotificationType{
@@ -69,6 +71,7 @@ public class OptimalBot extends pokerPlayer {
     @Override
     public String chooseAction(List<String> actions) {
         String decision;
+        StringBuilder sb = new StringBuilder();
         if ( actions.contains( "call" ) && actions.contains( "fold" )){
             decision = determineCall();
             return decision;
@@ -86,7 +89,7 @@ public class OptimalBot extends pokerPlayer {
 
     @Override
     public int raiseAmount() {
-        return 0;
+        return 100;
     }
 
     public void getCurrentHandNumber(int handNum){
@@ -164,7 +167,7 @@ public class OptimalBot extends pokerPlayer {
     public void clearHand(int handNum){
         this.holeCards.clear();
         this.tableCards.clear();
-        debugWrite("beau says hands played " + handNum);
+        //debugWrite("beau says hands played " + handNum);
     }
 
     public void getRiver(Matcher matcher){
@@ -176,16 +179,21 @@ public class OptimalBot extends pokerPlayer {
                 card = new String[2];
             }
         }
+
+        currentHand = getAvailableCards();
+        currentHandRank = getHandRank();
+        System.out.println("current hand length: " + currentHand.size()+ " handRank: " + );
+
     }
 
     public void updatePot(int potUpdate){
         currentPot = potUpdate;
-        debugWrite("Beau says CURRENT POT IS: " + currentPot);
+        //debugWrite("Beau says CURRENT POT IS: " + currentPot);
 
     }
     public void updateCurrentBet(int betAmountUpdate){
         currentBetAmount = betAmountUpdate;
-        debugWrite("Beau says CURRENT BET AMOUNT IS: " + currentBetAmount);
+        //debugWrite("Beau says CURRENT BET AMOUNT IS: " + currentBetAmount);
 
     }
 
@@ -204,7 +212,7 @@ public class OptimalBot extends pokerPlayer {
             debugWrite(opponentName);
             opponents.add(new Opponent(opponentName));
         }
-        debugWrite("BEAU SAYS: " + group1);
+        //debugWrite("BEAU SAYS: " + group1);
     }
 
     public String removeDot(String msg){
@@ -214,6 +222,11 @@ public class OptimalBot extends pokerPlayer {
         return msg;
     }
 
+    /**
+     * updates the data for an opponent. Keeps track of folds, calls, and raises
+     * @param opponentName
+     * @param action
+     */
     public void updateOpponentAction(String opponentName, String action){
         for(Opponent opponent : opponents){
             if(opponent.getName().equals(opponentName)){
@@ -222,21 +235,70 @@ public class OptimalBot extends pokerPlayer {
             }
         }
     }
+
+    /**
+     * method to determine if the program should call, raise, etc
+     * @return
+     */
     public String determineCall(){
-        if(currentPot > 0 && currentBetAmount > 0){
-            int potCheck = currentPot/currentBetAmount;
-            if(potCheck > 3){
+        if(currentHand.size() >= 5){
+            if(currentHandRank > 1){
                 return "call";
             }
-            else{
-                return "fold";
+            else if(currentHandRank > 2){
+                return "raise";
             }
-        }
-        else{
-            return "call";
         }
 
     }
+
+    /**
+     * gets the hand rank if there are enough available cards for a full hand.
+     *
+     * The method will create the hand and then be tested with the pokerDealer.rankHand() method
+     *
+     * @return
+     */
+    public double getHandRank(){
+        double handRank;
+        if(currentHand.size() == 5){
+            handRank = pokerDealer.rankHand(currentHand.toArray(new String[0][0]), false );
+        }
+        else if(currentHand.size() == 6){
+            String[][] hand = new String[5][2];
+            for(int i = 0; i < 5; i++){
+                hand[i] = currentHand.get(i);
+            }
+            handRank = pokerDealer.rankHand(hand);
+        }
+        else if(currentHand.size() == 7){
+            handRank = pokerDealer.rankHand(showHand());
+        }
+        else{
+            handRank = 0.0;
+        }
+
+        return handRank;
+    }
+    public List<String[]> getAvailableCards(){
+        List<String[]> availableCards = new ArrayList<>();
+
+        if(holeCards.size() > 0){
+            for(int i = 0; i < holeCards.size(); i++){
+                availableCards.add(holeCards.get(i));
+            }
+        }
+
+        if(tableCards.size() > 0){
+            for(int i = 0; i < tableCards.size(); i++){
+                availableCards.add(tableCards.get(i));
+
+            }
+        }
+        return availableCards;
+    }
+
+
 
     private class Opponent{
         private int id;
@@ -293,6 +355,7 @@ public class OptimalBot extends pokerPlayer {
 
 
     }
+
 
 }
 
