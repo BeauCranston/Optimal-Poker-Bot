@@ -82,7 +82,7 @@ public class PokerTournament {
             message += player.name + ", ";
         
         message = message.substring( 0, message.length() - 2 ) + ".";
-        message = message.substring( 0, message.lastIndexOf( ", " ) ) + " and" + message.substring( message.lastIndexOf( ", " ) + 1 );
+        message = message.substring( 0, message.lastIndexOf( ", " ) ) + ", and" + message.substring( message.lastIndexOf( ", " ) + 1 );
         dealer.announce( message );
 
         // The game ends when there are no more players, or when the big blind

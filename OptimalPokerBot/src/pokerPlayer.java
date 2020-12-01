@@ -73,6 +73,7 @@ public abstract class pokerPlayer implements DealerListener {
         cardsAvailable[1] = (String[])(holeCards.toArray())[1];
         
         String[][] tc = tableCards.toArray(new String[0][0]);
+        System.out.println(tableCards.size());
         int a = 2;
         for ( String[] c : tc ) {
             cardsAvailable[a++] = c;
@@ -80,7 +81,8 @@ public abstract class pokerPlayer implements DealerListener {
         if (a<7) {
             // The player has not submitted enough cards
             bestHand = cardsAvailable;
-        } else {
+        }
+        else {
             for( int i = 0; i<cardsAvailable.length; i++ ) {
                 testHand[0] = cardsAvailable[i];
                 for ( int j = i+1; j < cardsAvailable.length; j++ ) {
