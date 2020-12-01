@@ -182,7 +182,7 @@ public class OptimalBot extends pokerPlayer {
 
         currentHand = getAvailableCards();
         currentHandRank = getHandRank();
-        System.out.println("current hand length: " + currentHand.size()+ " handRank: " + );
+        System.out.println("current hand length: " + currentHand.size()+ " handRank: " + currentHandRank);
 
     }
 
@@ -280,6 +280,12 @@ public class OptimalBot extends pokerPlayer {
 
         return handRank;
     }
+
+    public double getBestPossibleHandRank(){
+        tableCards
+    }
+
+
     public List<String[]> getAvailableCards(){
         List<String[]> availableCards = new ArrayList<>();
 
