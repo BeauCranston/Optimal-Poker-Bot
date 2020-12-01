@@ -13,7 +13,7 @@ public class pokerDealer {
     private final List<DealerListener> listeners = new ArrayList<>();
     public void addListener(DealerListener toAdd) {        listeners.add(toAdd);    }
     public void announce( String msg ) {
-        System.out.printf( "Dealer announces:\t%s%n", msg );
+        //System.out.printf( "Dealer announces:\t%s%n", msg );
 
         // Notify everybody that may be interested.
         listeners.stream().forEach((hl) -> { hl.notification(msg); });

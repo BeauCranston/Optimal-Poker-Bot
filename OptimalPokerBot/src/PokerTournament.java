@@ -17,16 +17,26 @@ import java.util.*;
 
 public class PokerTournament {
 //    final static boolean debug = false;
-    final static boolean debug = true;
+    final static boolean debug = false;
     final static long version = 20203500;
     enum Phases { ANTE, BURN, HOLE, FLOP, TURN, RIVER, BET, REVEAL }
-
+    public static double wins = 0;
+    public static double runs = 0;
+    public static String winner;
     public static void debugWrite( String str ) {
         if ( debug == true ) {
             System.out.print( str );
+
         }
     }
+    static{
+        for(int i = 0; i < 1000; i++){
+            runs++;
+            main(new String[]{"hello"});
 
+        }
+
+    }
     public static void main(String[] args) {
         pokerDealer dealer = new pokerDealer();
         List<pokerPlayer> players = new ArrayList<>();
@@ -96,7 +106,7 @@ public class PokerTournament {
             Deck deck = new Deck();
             deck.shuffle();
             
-            System.out.println("");
+            //System.out.println("");
             dealer.announce( String.format( "Starting hand %d, please ante up.", handsPlayed++ ) );
             int pot = 0;
             // for side pots track how many chips the player has invested in the pot
@@ -329,8 +339,17 @@ public class PokerTournament {
             Collections.rotate( players, -1);
         }
 
-        if ( players.size() == 1 )
-            dealer.announce( players.get(0).name + " wins!" );
+        if ( players.size() == 1 ){
+            String name = players.get(0).name;
+            dealer.announce(  name + " wins!" );
+            winner = name;
+            if(winner.equals("Your bot")){
+                wins++;
+            }
+            double winPercentage = (wins/runs)*100;
+            System.out.println("winPercentage equals: " + winPercentage + "%");
+        }
+
         else {
             message = "Due to strategies used, the game is a draw between ";
             for ( int i = 0; i < players.size(); i++ ) {
@@ -343,7 +362,10 @@ public class PokerTournament {
             }
             message = message + ".";
             dealer.announce( message );
+
         }
+
+
     }
 
     public static int checkBet( pokerPlayer player, int betAmount, pokerDealer dealer, String playerStatus ) {

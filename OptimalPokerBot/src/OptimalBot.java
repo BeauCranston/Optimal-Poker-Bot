@@ -5,7 +5,7 @@ import java.util.regex.Pattern;
 
 public class OptimalBot extends pokerPlayer {
     private int tablePosition;
-    private boolean debug = true;
+    private boolean debug = false;
     private double foldRate;
     private double callRate;
     private double raiseRate;
