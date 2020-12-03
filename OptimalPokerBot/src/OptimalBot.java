@@ -7,43 +7,59 @@ public class OptimalBot extends pokerPlayer {
     private int tablePosition;
     private boolean debug = true;
     private double foldRate;
+    //the rate in which it calls instead of folds
     private double callRate;
-    private double raiseRate;
+    //th rate in which it raises when it calls or bets when the call is 0
+    private double raiseThreshold = 0.25;
+    private double allInThreshold = 0.8;
+    private int raiseAmount = 1000;
+    private int betAmount = 0;
     private int handsPlayed;
-    private List<String[]> currentHand;
+    private String[][] currentHand;
+    private String[][] availableCards;
+    private ArrayList<Opponent> opponents = new ArrayList<>();
     private int currentPot;
     private int currentBetAmount;
-    private double currentHandRank;
-    private ArrayList<Opponent> opponents = new ArrayList<>();
+    private boolean isAlive = false;
+
     //order is important
     enum NotificationType{
         init,
+        initPlayers,
         start,
         flop,
         river,
         potUpdate,
         betAmountUpdate,
-        initOpponent,
         updateOpponentFoldRate,
         updateOpponentCallRate,
         updateOpponentRaiseRate,
         playerBusted,
         Invalid
     }
+    enum actions{
+        check,
+        call,
+        bet,
+        raise,
+        allin,
+        fold
+    }
+
     Pattern initializePat = Pattern.compile("^Hello Players.  New Game Starting\\.$");
+    Pattern initPlayersPat = Pattern.compile("^.*Seated at this game are (.*,) and (.*)\\.*$", Pattern.DOTALL);
     Pattern startPat =  Pattern.compile( "^.*Starting hand (.+), please ante up\\.$", Pattern.DOTALL );
     Pattern flopPat = Pattern.compile( "^.*Dealer shows (.)(.) (.)(.) (.)(.).*$", Pattern.DOTALL );
     Pattern riverTurnPat = Pattern.compile( "^.*Dealer shows (.)(.).*$", Pattern.DOTALL );
     Pattern potUpdatePat = Pattern.compile("^.*As a result of betting, the pot is now (\\d*)\\.*$", Pattern.DOTALL);
     Pattern betAmountUpdatePat = Pattern.compile("^.*The bet is (\\d+) to (.*)\\.$");
-    Pattern initOpponentPat = Pattern.compile("^.*Seated at this game are (.*,) and (.*)\\.*$", Pattern.DOTALL);
     Pattern updateOpponentFoldRatePat = Pattern.compile("^(.*) has folded\\.$");
     Pattern updateOpponentCallRatePat = Pattern.compile("^(.*) callCount \\d* \\.\\.\\. $");
     Pattern updateOpponentRaiseRatePat = Pattern.compile("^(.*) has called (\\d*) and raised by (\\d*)\\.$");
     Pattern playerBustedPat = Pattern.compile("^(.*) has busted at hand (\\d*) and must leave the table\\.$");
 
     //order of this arraylist is also important since the riverTurn pattern technically matches the flop pattern but not vice versa
-    ArrayList<Pattern> dealerAnnouncements = new ArrayList(Arrays.asList(initializePat, startPat, flopPat, riverTurnPat, potUpdatePat, betAmountUpdatePat, initOpponentPat, updateOpponentFoldRatePat, updateOpponentCallRatePat, updateOpponentRaiseRatePat, playerBustedPat));
+    ArrayList<Pattern> dealerAnnouncements = new ArrayList(Arrays.asList(initializePat, initPlayersPat, startPat, flopPat, riverTurnPat, potUpdatePat, betAmountUpdatePat, updateOpponentFoldRatePat, updateOpponentCallRatePat, updateOpponentRaiseRatePat, playerBustedPat));
     
 
 
@@ -54,6 +70,7 @@ public class OptimalBot extends pokerPlayer {
     public OptimalBot( String name, int chips ){
         super( name, chips );
     }
+
 
     public void debugWrite(String msg){
         if(debug){
@@ -80,18 +97,69 @@ public class OptimalBot extends pokerPlayer {
             SecureRandom rnd = new SecureRandom();
             return actions.get( rnd.nextInt( actions.size() ) );
         }
+//        if(this.tableCards.size() == 3){
+//
+//        }
+//        else if(this.tableCards.size() == 4){
+//
+//        }
+//        else if(this.tableCards.size() == 5){
+//
+//        }
+//        else{
+//            System.out.println("invalid table card size");
+//        }
     }
 
     @Override
     public int betAmount() {
-        return 0;
+        double handConfidence = calculateHandConfidence();
+        //if the hand is good enough then raise
+        if( handConfidence > raiseThreshold){
+            return (int)handConfidence + betAmount * (raiseAmount/2);
+        }
+        //if the hand is really good then go all in if its the last betting round
+        else if(handConfidence > allInThreshold && availableCards.length == 7){
+            return chipTotal;
+        }
+        //otherwise just check
+        else{
+            return 0;
+        }
+
+    }
+
+    /**
+     * calculates how good a hand is by getting the current hand rank, and the best rank that anyone could have given the table cards and divides them.
+     *
+     * @return a decimal that represents how good the hand is
+     */
+    public double calculateHandConfidence(){
+        double handRank = getHandRank(currentHand);
+        double bestRank = getHandRank(getBestHand());
+
+        return handRank/bestRank;
+
     }
 
     @Override
     public int raiseAmount() {
-        return 100;
+        double handConfidence = calculateHandConfidence();
+        int raise = (int)(raiseAmount/handConfidence);
+        //if the hand is really good and it is the last betting round of the turn then go all in
+        if(handConfidence > allInThreshold && availableCards.length == 7){
+            return chipTotal;
+        }
+        //otherwise just raise by the raise amount
+        return raise;
     }
 
+    public void setRaiseAmount(int raise){
+        this.raiseAmount = raise;
+    }
+    public void setBetAmount(int raise){
+        this.betAmount = raise;
+    }
     public void getCurrentHandNumber(int handNum){
         handsPlayed = handNum;
     }
@@ -109,7 +177,12 @@ public class OptimalBot extends pokerPlayer {
         for(int i = 0; i < NotificationType.values().length - 1; i++){
             //assign an instance to the match and call matches to check for the notifcation type as well as get the capture groups to pass as params
             if((matcher = dealerAnnouncements.get(i).matcher(msg)).matches()){
-                RespondToAnnouncement(NotificationType.values()[i], matcher);
+                NotificationType nt = NotificationType.values()[i];
+                //check if the player is in the game or if the game is initializing. if none of these conditions are true then don't process the notification
+                if(isAlive || nt.equals(NotificationType.init) || nt.equals(NotificationType.initPlayers) ){
+                    RespondToAnnouncement(nt, matcher);
+                }
+
                 break;
             }
         }
@@ -122,11 +195,13 @@ public class OptimalBot extends pokerPlayer {
      * @param matcher holds the regex capture groups used to extract data
      */
     public void RespondToAnnouncement(NotificationType notificationType, Matcher matcher){
-
         switch(notificationType){
             case init:
                 //says hello to the dealer
                 System.out.printf( "%s replies:%n\tHello dealer%n", name );
+                break;
+            case initPlayers:
+                initPlayers(matcher);
                 break;
             case start:
                 //clears the hand
@@ -142,9 +217,6 @@ public class OptimalBot extends pokerPlayer {
             case betAmountUpdate:
                 updateCurrentBet(Integer.parseInt(matcher.group(1)));
                 break;
-            case initOpponent:
-                initOpponents(matcher);
-                break;
             case updateOpponentFoldRate:
                 updateOpponentAction(matcher.group(1),"f");
                 break;
@@ -155,7 +227,11 @@ public class OptimalBot extends pokerPlayer {
             case updateOpponentRaiseRate:
                 updateOpponentAction(matcher.group(1),"r");
                 break;
+                //if the bot busts don't process anymore notifications
             case playerBusted:
+                if(matcher.group(1).equals(name)){
+                    isAlive = false;
+                }
                 break;
             case Invalid:
                 break;
@@ -170,20 +246,25 @@ public class OptimalBot extends pokerPlayer {
         //debugWrite("beau says hands played " + handNum);
     }
 
+    /**
+     * when a river card is placed, the bot will reassess its ahnd,
+     * its hand rank, and the optimal hand rank that any player can have
+     *
+     * @param matcher
+     */
     public void getRiver(Matcher matcher){
         String[] card = new String[2];
         for ( int i = 1; i <= matcher.groupCount(); i++ ) {
             card[ (i - 1) % 2] = matcher.group( i );
             if ( i % 2 == 0 ) {
-                tableCards.add( card );
+                this.tableCards.add( card );
                 card = new String[2];
             }
         }
-
-        currentHand = getAvailableCards();
-        currentHandRank = getHandRank();
-        System.out.println("current hand length: " + currentHand.size()+ " handRank: " + currentHandRank);
-
+        //when the river gets changed reset the value of the current hand and hand rank to account for the new card
+        availableCards = getAvailableCards();
+        //get best hands from the cards available to the bot
+        currentHand = getHand(availableCards);
     }
 
     public void updatePot(int potUpdate){
@@ -199,22 +280,34 @@ public class OptimalBot extends pokerPlayer {
 
     /**
      * initializes opponents by getting the names and using them to add Opponent instances to the opponents array list
+     * also initializes the bot by changing "is alive" to true if the players list contains the name of the bot
      * @param matcher regex matcher from testing the notification
      */
-    public void initOpponents(Matcher matcher){
+    public void initPlayers(Matcher matcher){
         String group1 = new String();
         for(int i = 1; i <= matcher.groupCount(); i++){
                 group1 = group1.concat(matcher.group(i).trim());
         }
-        String[] OpponentNames = group1.split(",");
-        for(String opponentNameRaw : OpponentNames){
-            String opponentName = removeDot(opponentNameRaw.trim());
-            debugWrite(opponentName);
-            opponents.add(new Opponent(opponentName));
+        String[] playerNames = group1.split(",");
+        for(String playerNameRaw : playerNames){
+            String playerName = removeDot(playerNameRaw.trim());
+            debugWrite(playerName);
+            if(playerName.equals(name)){
+                opponents.add(new Opponent(playerName));
+            }
+            else{
+                isAlive = true;
+            }
+
         }
         //debugWrite("BEAU SAYS: " + group1);
     }
 
+    /**
+     * removes a . from a string.
+     * @param msg
+     * @return
+     */
     public String removeDot(String msg){
         if(msg.endsWith(".")){
             msg = msg.substring(0,msg.length()-1);
@@ -241,15 +334,7 @@ public class OptimalBot extends pokerPlayer {
      * @return
      */
     public String determineCall(){
-        if(currentHand.size() >= 5){
-            if(currentHandRank > 1){
-                return "call";
-            }
-            else if(currentHandRank > 2){
-                return "raise";
-            }
-        }
-
+        return "";
     }
 
     /**
@@ -259,36 +344,114 @@ public class OptimalBot extends pokerPlayer {
      *
      * @return
      */
-    public double getHandRank(){
+    public double getHandRank(String[][] hand){
         double handRank;
-        if(currentHand.size() == 5){
-            handRank = pokerDealer.rankHand(currentHand.toArray(new String[0][0]), false );
-        }
-        else if(currentHand.size() == 6){
-            String[][] hand = new String[5][2];
-            for(int i = 0; i < 5; i++){
-                hand[i] = currentHand.get(i);
-            }
-            handRank = pokerDealer.rankHand(hand);
-        }
-        else if(currentHand.size() == 7){
-            handRank = pokerDealer.rankHand(showHand());
+        if(hand.length == 5 || hand.length == 6 || hand.length == 7){
+            handRank = pokerDealer.rankHand(getHand(hand));
         }
         else{
             handRank = 0.0;
+            debugWrite("invalid hand size");
         }
 
         return handRank;
     }
 
-    public double getBestPossibleHandRank(){
-        tableCards
+    /**
+     * returns the bots hand. The bot ignores less optimal hands and returns the best hand the bot has.
+     *
+     * @param availableCards river cards + hole cards. Range can be 5-7
+     * @return
+     */
+    public String[][] getHand(String[][] availableCards){
+        int availableCardNum = availableCards.length;
+        //left to right hand: takes the first 5 cards
+        double handRank;
+        String[][] ltrHand = new String[5][2];
+        double ltrHandRank = 0;
+        //right to left hand: takes the last 5 cards
+        String[][] rtlHand = new String[5][2];
+        double rtlHandRank = 0;
+        //if the amount of available cards is < 6 then return the available cards as an array
+        if(availableCardNum < 6){
+            return availableCards;
+        }
+        //otherwise get the best 5 values
+        else{
+            for(int i = 0; i < 5; i++){
+                //left to right hand 0-5
+                ltrHand[i] = availableCards[i];
+                //right to left hand from (6-1) || (7-2) since a hand must have a length of 5
+                rtlHand[i] = availableCards[(availableCardNum - 1) - i];
+            }
+            //rank hands
+            ltrHandRank = pokerDealer.rankHand(ltrHand);
+            rtlHandRank = pokerDealer.rankHand(rtlHand);
+            //return the better out of the two
+            if(ltrHandRank >= rtlHandRank){
+                return ltrHand.clone();
+            }
+            else{
+                return rtlHand.clone();
+            }
+        }
+
     }
 
 
-    public List<String[]> getAvailableCards(){
-        List<String[]> availableCards = new ArrayList<>();
+    /**
+     * gets the best possible hand based on what is on the table. It uses the current hand as a starting point and then checks every possible hand that is not the current hand for
+     * something better.
+     * A hand can have any number of cards from 5 - 7 to account for the flop plus the states after each river card is added.
+     * @return
+     */
+    public String[][] getBestHand(){
+        //initialize an outer deck to handle the first "empty slot"
+        Deck deck = new Deck();
+        //initialize best hand to be the current hand
+        String[][] bestHand = currentHand.clone();
+        for(int i = 0; i < 52; i++){
+            //draw a card
+            String[] card = deck.dealCard();
+            // create a temporary hand to check against the best hand
+            List<String[]> tempHand = new ArrayList<>();
+            //add the table cards
+            tempHand.addAll(tableCards);
+            //an inner deck must be initialized to handle the second "empty slot".
+            Deck innerDeck = new Deck();
+            for(int j = 0; j < 52; j++){
+                //inner card variable to be added to the temp hand to be tested against
+                String[]innerCard = innerDeck.dealCard();
+                //if the temp hand does not already have the card and the card is not one of the hole cards from the current hand then it is valid
+                if(!tempHand.contains(card) && !Arrays.asList(currentHand.clone()).contains(card)){
+                    //add the cards to the temp hand
+                    tempHand.add(card);
+                    tempHand.add(innerCard);
+                    //get hand can handle any hand length from 5-7 and will return the best 5 card hand from the list given
+                    String[][] hand = getHand(tempHand.toArray(new String[tempHand.size()][2]));
+                    //get the rank of the tempHand
+                    double handRank = pokerDealer.rankHand(hand);
+                    //get the rank of the "best" hand
+                    double bestRank = pokerDealer.rankHand(bestHand);
+                    //if the rank of the tempHand is > than the rank of the bestHand then the bestHand becomes the value of the tempHand
+                    if(handRank > bestRank){
+                        bestHand = hand.clone();
+                    }
+                }
+            }
+        }
 
+        //return the best hand
+        return bestHand;
+    }
+
+
+    /**
+     * returns the available cards. This includes the table cards, and the hole cards.
+     * @return
+     */
+    public String[][] getAvailableCards(){
+        List<String[]> availableCards = new ArrayList<>();
         if(holeCards.size() > 0){
             for(int i = 0; i < holeCards.size(); i++){
                 availableCards.add(holeCards.get(i));
@@ -301,10 +464,8 @@ public class OptimalBot extends pokerPlayer {
 
             }
         }
-        return availableCards;
+        return availableCards.toArray(new String[availableCards.size()][2]);
     }
-
-
 
     private class Opponent{
         private int id;
@@ -325,20 +486,20 @@ public class OptimalBot extends pokerPlayer {
             switch(action){
                 case "f":
                     foldCount++;
-                    debugWrite("Incremented " + getName() + "'s fold count to " + foldCount);
+                    //debugWrite("Incremented " + getName() + "'s fold count to " + foldCount);
                     break;
                 case "c":
                     callCount++;
-                    debugWrite("Incremented " + getName() + "'s call count to " + callCount);
+                    //debugWrite("Incremented " + getName() + "'s call count to " + callCount);
                     break;
                 case "r":
                     raiseCount++;
-                    debugWrite("Incremented " + getName() + "'s raise count to " + raiseCount);
+                    //debugWrite("Incremented " + getName() + "'s raise count to " + raiseCount);
                     callCount++;
-                    debugWrite("Incremented " + getName() + "'s call count to " + callCount);
+                    //debugWrite("Incremented " + getName() + "'s call count to " + callCount);
                     break;
                 default:
-                    debugWrite("invalid");
+                    debugWrite("invalid action to increment");
             }
         }
         public String getName(){

@@ -458,6 +458,7 @@ public class PokerTournament {
 
                 int betAmount;
                 switch( playerChoice ) {
+                    //a bet is what you choose to do when the call amount is 0
                     case "bet":
                         betAmount = players.get( playerIndex ).betAmount();
 

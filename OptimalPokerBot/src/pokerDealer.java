@@ -11,7 +11,7 @@ import java.util.*;
 public class pokerDealer {
     // See http://stackoverflow.com/a/6270150/759749 for more information
     private final List<DealerListener> listeners = new ArrayList<>();
-    public void addListener(DealerListener toAdd) {        listeners.add(toAdd);    }
+    public void addListener(DealerListener toAdd) {listeners.add(toAdd);}
     public void announce( String msg ) {
         System.out.printf( "Dealer announces:\t%s%n", msg );
 
@@ -40,7 +40,7 @@ public class pokerDealer {
         return holeCards;
     }
         
-    public static double rankHand(String[][] hand) { return rankHand(hand, true); }
+    public static double rankHand(String[][] hand) { return rankHand(hand, false); }
     
     public static double rankHand( String[][] hand, boolean debug ) {
         double rank = 0;
