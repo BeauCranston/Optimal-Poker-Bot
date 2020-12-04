@@ -6,11 +6,9 @@ import java.util.regex.Pattern;
 public class OptimalBot extends pokerPlayer {
     private int tablePosition;
     private boolean debug = true;
-    private double foldRate;
-    //the rate in which it calls instead of folds
-    private double callRate;
     //th rate in which it raises when it calls or bets when the call is 0
-    private double raiseThreshold = 0.25;
+    private double raiseThreshold = 0.5;
+    private double callThreshold = 0.3;
     private double allInThreshold = 0.8;
     private int raiseAmount = 1000;
     private int betAmount = 0;
@@ -45,7 +43,6 @@ public class OptimalBot extends pokerPlayer {
         allin,
         fold
     }
-
     Pattern initializePat = Pattern.compile("^Hello Players.  New Game Starting\\.$");
     Pattern initPlayersPat = Pattern.compile("^.*Seated at this game are (.*,) and (.*)\\.*$", Pattern.DOTALL);
     Pattern startPat =  Pattern.compile( "^.*Starting hand (.+), please ante up\\.$", Pattern.DOTALL );
@@ -60,8 +57,6 @@ public class OptimalBot extends pokerPlayer {
 
     //order of this arraylist is also important since the riverTurn pattern technically matches the flop pattern but not vice versa
     ArrayList<Pattern> dealerAnnouncements = new ArrayList(Arrays.asList(initializePat, initPlayersPat, startPat, flopPat, riverTurnPat, potUpdatePat, betAmountUpdatePat, updateOpponentFoldRatePat, updateOpponentCallRatePat, updateOpponentRaiseRatePat, playerBustedPat));
-    
-
 
     public OptimalBot() {
         super( "Uninitialized", 0 );
@@ -87,28 +82,21 @@ public class OptimalBot extends pokerPlayer {
 
     @Override
     public String chooseAction(List<String> actions) {
-        String decision;
-        StringBuilder sb = new StringBuilder();
-        if ( actions.contains( "call" ) && actions.contains( "fold" )){
-            decision = determineCall();
-            return decision;
+//        double handConfidence = calculateHandConfidence();
+//        double improvementProba = handImprovementProba();
+        if(this.tableCards.size() == 3){
+
         }
-        else {
-            SecureRandom rnd = new SecureRandom();
-            return actions.get( rnd.nextInt( actions.size() ) );
+        else if(this.tableCards.size() == 4){
+
         }
-//        if(this.tableCards.size() == 3){
-//
-//        }
-//        else if(this.tableCards.size() == 4){
-//
-//        }
-//        else if(this.tableCards.size() == 5){
-//
-//        }
-//        else{
-//            System.out.println("invalid table card size");
-//        }
+        else if(this.tableCards.size() == 5){
+
+        }
+        else{
+            System.out.println("invalid table card size");
+        }
+        return"call";
     }
 
     @Override
@@ -116,7 +104,7 @@ public class OptimalBot extends pokerPlayer {
         double handConfidence = calculateHandConfidence();
         //if the hand is good enough then raise
         if( handConfidence > raiseThreshold){
-            return (int)handConfidence + betAmount * (raiseAmount/2);
+            return (int)((handConfidence + handImprovementProba()) * (raiseAmount/2));
         }
         //if the hand is really good then go all in if its the last betting round
         else if(handConfidence > allInThreshold && availableCards.length == 7){
@@ -135,10 +123,10 @@ public class OptimalBot extends pokerPlayer {
      * @return a decimal that represents how good the hand is
      */
     public double calculateHandConfidence(){
-        double handRank = getHandRank(currentHand);
-        double bestRank = getHandRank(getBestHand());
-
-        return handRank/bestRank;
+        double handRatio = getHandRank(currentHand.clone())/getHandRank(getBestHand());
+        double improvementProba = handImprovementProba();
+        double handConfidence = handRatio + (improvementProba/2);
+        return handConfidence;
 
     }
 
@@ -146,12 +134,9 @@ public class OptimalBot extends pokerPlayer {
     public int raiseAmount() {
         double handConfidence = calculateHandConfidence();
         int raise = (int)(raiseAmount/handConfidence);
-        //if the hand is really good and it is the last betting round of the turn then go all in
-        if(handConfidence > allInThreshold && availableCards.length == 7){
-            return chipTotal;
-        }
         //otherwise just raise by the raise amount
         return raise;
+
     }
 
     public void setRaiseAmount(int raise){
@@ -265,6 +250,14 @@ public class OptimalBot extends pokerPlayer {
         availableCards = getAvailableCards();
         //get best hands from the cards available to the bot
         currentHand = getHand(availableCards);
+        double currentHandRank = getHandRank(currentHand);
+        double bestHandRank = getHandRank(getBestHand());
+
+        double hc = calculateHandConfidence();
+        double ratio = currentHandRank/bestHandRank;
+        double handImprovementProba = handImprovementProba();
+        System.out.println("hand confidence: " + hc + " HIP: " + handImprovementProba + " ratio: " + ratio);
+        System.out.println("hand rank: " + currentHandRank + " best rank: " + bestHandRank);
     }
 
     public void updatePot(int potUpdate){
@@ -411,13 +404,13 @@ public class OptimalBot extends pokerPlayer {
         //initialize best hand to be the current hand
         String[][] bestHand = currentHand.clone();
         for(int i = 0; i < 52; i++){
-            //draw a card
-            String[] card = deck.dealCard();
             // create a temporary hand to check against the best hand
             List<String[]> tempHand = new ArrayList<>();
             //add the table cards
             tempHand.addAll(tableCards);
             //an inner deck must be initialized to handle the second "empty slot".
+            //draw a card
+            String[] card = deck.dealCard();
             Deck innerDeck = new Deck();
             for(int j = 0; j < 52; j++){
                 //inner card variable to be added to the temp hand to be tested against
@@ -466,6 +459,40 @@ public class OptimalBot extends pokerPlayer {
         }
         return availableCards.toArray(new String[availableCards.size()][2]);
     }
+
+    /**
+     * the probability that a hand will improve given the current cards. This method allows the bot to think one step ahead
+     * and check how likly it is to move up. This probability will impact whether it folds, calls, or raises.
+     * If the river is full there is no chance to move up so 0 will be returned
+     * @return
+     */
+    public double handImprovementProba(){
+        Deck deck = new Deck();
+        int improvementCount = 0;
+        int totalCount = 0;
+        if(availableCards.length < 7){
+            for(int i = 0; i < 52; i++){
+                List<String[]> tempList = new ArrayList<>(Arrays.asList(availableCards.clone()));
+                String[] card = deck.dealCard();
+                if(!tempList.contains(card)){
+                    tempList.add(card);
+                    totalCount++;
+                    String[][] tempHand = getHand(tempList.toArray(new String[tempList.size()][2]));
+                    double tempHandRank = getHandRank(tempHand);
+                    double currentHandRank = getHandRank(currentHand);
+                    if(tempHandRank > currentHandRank){
+                        improvementCount++;
+                    }
+                }
+            }
+            return improvementCount/totalCount;
+        }
+        else{
+            return 0;
+        }
+
+    }
+
 
     private class Opponent{
         private int id;

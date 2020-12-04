@@ -6,7 +6,8 @@ public class Test {
 
     public static void main(String[] args) {
         List<String[]> availableCards = new ArrayList<>(Arrays.asList(new String[]{"H", "4"}, new String[]{"C", "6"}, new String[]{"S", "9"}, new String[]{"H", "T"}, new String[]{"H", "3"}));
-
+        int a = (int)((0.2 + 0.26) * (1000/2));
+        System.out.println(a);
     }
 
 
