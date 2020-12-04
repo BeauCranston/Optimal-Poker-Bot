@@ -82,21 +82,50 @@ public class OptimalBot extends pokerPlayer {
 
     @Override
     public String chooseAction(List<String> actions) {
-//        double handConfidence = calculateHandConfidence();
-//        double improvementProba = handImprovementProba();
-        if(this.tableCards.size() == 3){
+        double handRank;
+        double handConfidence;
+        if(actions.contains("fold") && (actions.contains("bet") || actions.contains("call"))){
+            handConfidence = calculateHandConfidence();
+            if(handConfidence > callThreshold){
+                return "fold";
+            }
+        }
+        else if(actions.contains("bet") || actions.contains("check")){
+            if(currentHand != null){
+                handConfidence = calculateHandConfidence();
+                if(handConfidence > raiseThreshold){
+                    return "bet";
+                }
+                else{
+                    return "check";
+                }
+            }
+            else{
+
+                if(currentBetAmount < 500){
+                    if( > 0.1){
+
+                    }
+                }
+            }
+
 
         }
-        else if(this.tableCards.size() == 4){
-
-        }
-        else if(this.tableCards.size() == 5){
+        else if(actions.contains("call") || actions.contains("raise")){
+            handConfidence = calculateHandConfidence();
+            if(handConfidence > raiseThreshold){
+                return "bet";
+            }
+            else{
+                return "check";
+            }
 
         }
         else{
-            System.out.println("invalid table card size");
+            System.out.println("either unconsidered state, or invalid");
+            return "fold";
         }
-        return"call";
+        return "fold";
     }
 
     @Override
@@ -117,18 +146,7 @@ public class OptimalBot extends pokerPlayer {
 
     }
 
-    /**
-     * calculates how good a hand is by getting the current hand rank, and the best rank that anyone could have given the table cards and divides them.
-     *
-     * @return a decimal that represents how good the hand is
-     */
-    public double calculateHandConfidence(){
-        double handRatio = getHandRank(currentHand.clone())/getHandRank(getBestHand());
-        double improvementProba = handImprovementProba();
-        double handConfidence = handRatio + (improvementProba/2);
-        return handConfidence;
 
-    }
 
     @Override
     public int raiseAmount() {
@@ -223,6 +241,7 @@ public class OptimalBot extends pokerPlayer {
 
         }
     }
+
 
 
     public void clearHand(int handNum){
@@ -393,7 +412,19 @@ public class OptimalBot extends pokerPlayer {
 
     }
 
+    /**
+     * calculates how good a hand is by getting the current hand rank, and the best rank that anyone could have given the table cards and divides them.
+     *
+     * @return a decimal that represents how good the hand is
+     */
+    public double calculateHandConfidence(){
+        double handRank = getHandRank(currentHand.clone());
+        double handRatio = handRank /getHandRank(getBestHand());
+        double improvementProba = handImprovementProba();
+        double handConfidence = handRatio + (improvementProba/2);
+        return handConfidence;
 
+    }
     /**
      * gets the best possible hand based on what is on the table. It uses the current hand as a starting point and then checks every possible hand that is not the current hand for
      * something better.
@@ -511,7 +542,8 @@ public class OptimalBot extends pokerPlayer {
                     }
                 }
             }
-            return improvementCount/totalCount;
+            double improvementProbability = (double)improvementCount/(double)totalCount;
+            return improvementProbability ;
         }
         else{
             return 0;
