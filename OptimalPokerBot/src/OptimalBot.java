@@ -337,10 +337,16 @@ public class OptimalBot extends pokerPlayer {
      *
      * @return
      */
-    public double getHandRank(String[][] hand){
+    public double getHandRank(String[][] cards){
         double handRank;
-        if(hand.length == 5 || hand.length == 6 || hand.length == 7){
-            handRank = pokerDealer.rankHand(getHand(hand));
+        //if the length is 5 we can assume it is a hand
+        if(cards.length == 5 ){
+            handRank = pokerDealer.rankHand(cards);
+        }
+        //otherwise it is a collection of cards that we need to get a hand out of before ranking it
+        else if(cards.length == 6 || cards.length == 7){
+            String[][]hand = getHand(cards);
+            handRank = pokerDealer.rankHand(hand);
         }
         else{
             handRank = 0.0;
@@ -356,38 +362,34 @@ public class OptimalBot extends pokerPlayer {
      * @param availableCards river cards + hole cards. Range can be 5-7
      * @return
      */
-    public String[][] getHand(String[][] availableCards){
-        int availableCardNum = availableCards.length;
-        //left to right hand: takes the first 5 cards
-        double handRank;
-        String[][] ltrHand = new String[5][2];
-        double ltrHandRank = 0;
-        //right to left hand: takes the last 5 cards
-        String[][] rtlHand = new String[5][2];
-        double rtlHandRank = 0;
-        //if the amount of available cards is < 6 then return the available cards as an array
-        if(availableCardNum < 6){
-            return availableCards;
-        }
-        //otherwise get the best 5 values
-        else{
-            for(int i = 0; i < 5; i++){
-                //left to right hand 0-5
-                ltrHand[i] = availableCards[i];
-                //right to left hand from (6-1) || (7-2) since a hand must have a length of 5
-                rtlHand[i] = availableCards[(availableCardNum - 1) - i];
-            }
-            //rank hands
-            ltrHandRank = pokerDealer.rankHand(ltrHand);
-            rtlHandRank = pokerDealer.rankHand(rtlHand);
-            //return the better out of the two
-            if(ltrHandRank >= rtlHandRank){
-                return ltrHand.clone();
-            }
-            else{
-                return rtlHand.clone();
-            }
-        }
+    public static String[][] getHand(String[][] availableCards){
+        String[][] bestHand = new String[5][2];
+        String[][] testHand = new  String[5][2];
+        double bestHandRank = 0.0;
+        for( int i = 0; i < availableCards.length; i++ ) {
+            testHand[0] = availableCards[i];
+            for ( int j = i+1; j < availableCards.length; j++ ) {
+                testHand[1] = availableCards[j];
+                for ( int k = j+1; k < availableCards.length; k++ ) {
+                    testHand[2] = availableCards[k];
+                    for ( int l = k+1; l < availableCards.length; l++ ) {
+                        testHand[3] = availableCards[l];
+                        for (int m = l+1; m < availableCards.length; m++ ) {
+                            testHand[4] = availableCards[m];
+                            //System.out.println(Arrays.toString(testHand));
+                            double testRank = pokerDealer.rankHand( testHand, false );
+                            if ( testRank > bestHandRank ) {
+                                bestHandRank = testRank;
+                                bestHand = Arrays.copyOf( testHand, testHand.length );
+                            }
+                        }//m
+                    }//l
+                }//k
+            }//j
+            // combinations.add( combo );
+        }//i
+
+        return bestHand;
 
     }
 
@@ -402,40 +404,64 @@ public class OptimalBot extends pokerPlayer {
         //initialize an outer deck to handle the first "empty slot"
         Deck deck = new Deck();
         //initialize best hand to be the current hand
-        String[][] bestHand = currentHand.clone();
-        for(int i = 0; i < 52; i++){
+        String[][] bestHand = getHand(availableCards);
+        //loop 52 - table cards
+        for(int i = 0; i < (52 - tableCards.size()); i++){
             // create a temporary hand to check against the best hand
-            List<String[]> tempHand = new ArrayList<>();
-            //add the table cards
-            tempHand.addAll(tableCards);
-            //an inner deck must be initialized to handle the second "empty slot".
-            //draw a card
-            String[] card = deck.dealCard();
-            Deck innerDeck = new Deck();
-            for(int j = 0; j < 52; j++){
-                //inner card variable to be added to the temp hand to be tested against
-                String[]innerCard = innerDeck.dealCard();
-                //if the temp hand does not already have the card and the card is not one of the hole cards from the current hand then it is valid
-                if(!tempHand.contains(card) && !Arrays.asList(currentHand.clone()).contains(card)){
-                    //add the cards to the temp hand
+            List<String[]> tempHand = new ArrayList<>(tableCards);
+            //loop until a card is found that is not in the table cards or the bots hole cards
+            while(tempHand.size() < tableCards.size() + 1){
+                String[] card = deck.dealCard();
+                if(!containsCard(tableCards, card)){
                     tempHand.add(card);
-                    tempHand.add(innerCard);
-                    //get hand can handle any hand length from 5-7 and will return the best 5 card hand from the list given
-                    String[][] hand = getHand(tempHand.toArray(new String[tempHand.size()][2]));
-                    //get the rank of the tempHand
-                    double handRank = pokerDealer.rankHand(hand);
-                    //get the rank of the "best" hand
-                    double bestRank = pokerDealer.rankHand(bestHand);
-                    //if the rank of the tempHand is > than the rank of the bestHand then the bestHand becomes the value of the tempHand
-                    if(handRank > bestRank){
-                        bestHand = hand.clone();
+                }
+            }
+            //an inner deck must be initialized to handle the second "empty slot".
+            Deck innerDeck = new Deck();
+            for(int j = 0; j < (52-tempHand.size()); j++){
+                //create a new inner arraylist that is equal to the temp list so that the list is reset every iteration and there is not too many cards
+                ArrayList<String[]>innerTempHand = new ArrayList<>(tempHand);
+                //loop until a valid card is found
+                while(innerTempHand.size() < tempHand.size() + 1){
+                    String[] card = innerDeck.dealCard();
+                    if(!containsCard(innerTempHand, card)){
+                        innerTempHand.add(card);
+                        String[][] hand = getHand(innerTempHand.toArray(new String[innerTempHand.size()][2]));
+                        //get the rank of the tempHand
+                        double handRank = getHandRank(hand);
+                        //get the rank of the "best" hand
+                        double bestRank = getHandRank(bestHand);
+                        //if the rank of the tempHand is > than the rank of the bestHand then the bestHand becomes the value of the tempHand
+                        if(handRank > bestRank){
+                            bestHand = hand.clone();
+                        }
                     }
                 }
+
             }
         }
 
         //return the best hand
         return bestHand;
+    }
+
+    public boolean containsCard(List<String[]> hand, String[] card){
+        boolean inHand = false;
+        for(String[] handCard : hand){
+            if(Arrays.equals(handCard, card)){
+                inHand = true;
+            }
+        }
+        return inHand;
+    }
+    public boolean containsCard(String[][]hand, String[] card){
+        boolean inHand = false;
+        for(String[] handCard : hand){
+            if(Arrays.equals(handCard, card)){
+                inHand = true;
+            }
+        }
+        return inHand;
     }
 
 
@@ -474,7 +500,7 @@ public class OptimalBot extends pokerPlayer {
             for(int i = 0; i < 52; i++){
                 List<String[]> tempList = new ArrayList<>(Arrays.asList(availableCards.clone()));
                 String[] card = deck.dealCard();
-                if(!tempList.contains(card)){
+                if(!containsCard(tempList, card)){
                     tempList.add(card);
                     totalCount++;
                     String[][] tempHand = getHand(tempList.toArray(new String[tempList.size()][2]));
