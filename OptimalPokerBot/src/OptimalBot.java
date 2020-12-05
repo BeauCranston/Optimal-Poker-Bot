@@ -12,22 +12,28 @@ BONUS MARKS :D :
 The problem with the randBot and why it causes crashes is because it will not account for when the bot has 0 chips but
 is still in the game so it will call rand.nextInt(0) which will produce an IllegalArgumentException.
 
+ if(chipTotal > 0){
+            return rnd.nextInt(chipTotal);
+        }
+        else{
+            return 0;
+        }
 
-
+this is what i inserted into the randbot to make sure no errors are thrown
  */
 
 public class OptimalBot extends pokerPlayer {
     private int tablePosition;
     private boolean debug = true;
-    //th rate in which it raises when it calls or bets when the call is 0
-    private double raiseThreshold = 0.5;
-    private double callThreshold = 0.3;
+    //default raise is just the call threshold * 1.5
+    private double raiseThreshold = 0.14 * 1.5;
+    //start with a call rate of 0.14 since that is the value of having a high card
+    private double callThreshold = 0.14;
     private double allInThreshold = 0.8;
-    private int raiseAmount = 1000;
     private int handsPlayed;
+    private ArrayList<String>playersAtTable = new ArrayList<>();
     private String[][] currentHand;
     private String[][] availableCards;
-    private ArrayList<Opponent> opponents = new ArrayList<>();
     private int currentPot;
     private int currentBetAmount;
     private boolean isAlive = false;
@@ -41,9 +47,6 @@ public class OptimalBot extends pokerPlayer {
         river,
         potUpdate,
         betAmountUpdate,
-        updateOpponentFoldRate,
-        updateOpponentCallRate,
-        updateOpponentRaiseRate,
         playerBusted,
         Invalid
     }
@@ -62,13 +65,10 @@ public class OptimalBot extends pokerPlayer {
     Pattern riverTurnPat = Pattern.compile( "^.*Dealer shows (.)(.).*$", Pattern.DOTALL );
     Pattern potUpdatePat = Pattern.compile("^.*As a result of betting, the pot is now (\\d*)\\.*$", Pattern.DOTALL);
     Pattern betAmountUpdatePat = Pattern.compile("^.*The bet is (\\d+) to (.*)\\.$");
-    Pattern updateOpponentFoldRatePat = Pattern.compile("^(.*) has folded\\.$");
-    Pattern updateOpponentCallRatePat = Pattern.compile("^(.*) callCount \\d* \\.\\.\\. $");
-    Pattern updateOpponentRaiseRatePat = Pattern.compile("^(.*) has called (\\d*) and raised by (\\d*)\\.$");
     Pattern playerBustedPat = Pattern.compile("^(.*) has busted at hand (\\d*) and must leave the table\\.$");
 
     //order of this arraylist is also important since the riverTurn pattern technically matches the flop pattern but not vice versa
-    ArrayList<Pattern> dealerAnnouncements = new ArrayList(Arrays.asList(initializePat, initPlayersPat, startPat, flopPat, riverTurnPat, potUpdatePat, betAmountUpdatePat, updateOpponentFoldRatePat, updateOpponentCallRatePat, updateOpponentRaiseRatePat, playerBustedPat));
+    ArrayList<Pattern> dealerAnnouncements = new ArrayList(Arrays.asList(initializePat, initPlayersPat, startPat, flopPat, riverTurnPat, potUpdatePat, betAmountUpdatePat, playerBustedPat));
 
     public OptimalBot() {
         super( "Uninitialized", 0 );
@@ -91,105 +91,6 @@ public class OptimalBot extends pokerPlayer {
     public void notification(String msg) {
         processNotification(msg);
     }
-
-    @Override
-    public String chooseAction(List<String> actions) {
-        double handRank;
-        double handConfidence;
-        int count = 0;
-        for(String string : actions){
-
-            System.out.println(actions.get(count));
-            count++;
-        }
-
-        if(actions.contains("call") && actions.contains("raise")){
-           return getOptimalAction(new String[]{"raise", "call"}, false);
-
-        }
-        else if(actions.contains("call") && actions.contains("raise")){
-            return getOptimalAction(new String[]{"raise", "call"}, true);
-
-        }
-        else{
-            System.out.println("either unconsidered state, or invalid");
-            return "fold";
-        }
-
-    }
-
-    public String getOptimalAction(String[]actions, boolean foldIncluded){
-        if(currentHand != null){
-            double handConfidence = calculateHandConfidence();
-            //if the hand is good enough to raise then it's also good enough to bet on
-            if(handConfidence > raiseThreshold){
-                return actions[0];
-            }
-            else if(foldIncluded && handConfidence < callThreshold){
-                return "fold";
-            }
-            else{
-                //good for when the hand is good enough to keep playing but better to get by without paying anything
-                return actions[1];
-            }
-        }
-        else{
-            double holeCardsRank = rankHoleCards(holeCards);
-            if(holeCardsRank > 1){
-                return actions[0];
-            }
-            else{
-                if(currentBetAmount < 500){
-                    return actions[1];
-                }
-                else{
-                    return "fold";
-                }
-
-            }
-        }
-    }
-
-    @Override
-    public int betAmount() {
-        double handConfidence = calculateHandConfidence();
-        //if the hand is good enough then raise
-        if( handConfidence > raiseThreshold){
-            return (int)((handConfidence + handImprovementProba()) * (raiseAmount/2));
-        }
-        //if the hand is really good then go all in if its the last betting round
-        else if(handConfidence > allInThreshold && availableCards.length == 7){
-            return chipTotal;
-        }
-        //otherwise just check
-        else{
-            return 0;
-        }
-
-    }
-
-
-
-    @Override
-    public int raiseAmount() {
-        if(currentHand != null){
-            double handConfidence = calculateHandConfidence();
-            int raise = (int)(raiseAmount/handConfidence);
-            //otherwise just raise by the raise amount
-            return raise;
-        }
-        else{
-            return 200;
-        }
-
-
-    }
-
-
-    public void getCurrentHandNumber(int handNum){
-        handsPlayed = handNum;
-    }
-
     /**
      * checks the message against the notification patterns and creates a match object to be used to get the data for the bot to read.
      *
@@ -244,17 +145,7 @@ public class OptimalBot extends pokerPlayer {
             case betAmountUpdate:
                 updateCurrentBet(Integer.parseInt(matcher.group(1)));
                 break;
-            case updateOpponentFoldRate:
-                updateOpponentAction(matcher.group(1),"f");
-                break;
-            case updateOpponentCallRate:
-                updateOpponentAction(matcher.group(1),"c");
-                break;
-
-            case updateOpponentRaiseRate:
-                updateOpponentAction(matcher.group(1),"r");
-                break;
-                //if the bot busts don't process anymore notifications
+            //if the bot busts don't process anymore notifications
             case playerBusted:
                 if(matcher.group(1).equals(name)){
                     isAlive = false;
@@ -265,6 +156,119 @@ public class OptimalBot extends pokerPlayer {
 
         }
     }
+    
+    @Override
+    public String chooseAction(List<String> actions) {
+        int count = 0;
+        for(String string : actions){
+
+            System.out.println(actions.get(count));
+            count++;
+        }
+        SetPlayerAggressiveness(3,3, 1.5);
+        if(actions.contains("call") && actions.contains("raise")){
+            if(actions.contains("fold")){
+                //if fold is included
+                return getOptimalAction(new String[]{"raise", "call"}, true);
+            }
+            else{
+                //if fold is not included
+                return getOptimalAction(new String[]{"raise", "call"}, false);
+            }
+
+        }
+        //determine whether to muck or show
+        else if(actions.contains("muck") && actions.contains("show")){
+            double handRank = getHandRank(currentHand);
+            //if the hand is good show it, otherwise don't show the hand
+            if(handRank > 1 ){
+                return "show";
+            }
+            else{
+                return "muck";
+            }
+        }
+        else{
+            System.out.println("either unconsidered state, or invalid");
+            return "fold";
+        }
+
+    }
+
+    /**
+     * finds the apporpriate action to take based on the curernt circumstances such as pot odds, position, hand confidence, and current bet.
+     * @param actions the actions i can take
+     * @param foldIncluded is fold included?
+     * @return the action my bot will take
+     */
+    public String getOptimalAction(String[]actions, boolean foldIncluded){
+        if(currentHand != null){
+            double handConfidence = calculateHandConfidence();
+            //if the hand is good enough to raise then it's also good enough to bet on
+            if(handConfidence > raiseThreshold){
+                return actions[0];
+            }
+            else if(foldIncluded && handConfidence < callThreshold){
+                return "fold";
+            }
+            else{
+                //good for when the hand is good enough to keep playing but better to get by without paying anything
+                if(handConfidence > callThreshold && handConfidence < raiseThreshold){
+                    return actions[1];
+                }
+                else{
+                    return "fold";
+                }
+            }
+        }
+        //pre flop
+        else{
+            //i dont want to bet on preflop unless if the bet is relatively small
+            if(currentBetAmount < 200){
+                return actions[1];
+            }
+            else{
+                return "fold";
+            }
+        }
+    }
+
+    /**
+     * sets the bet amount based on if the hand confidence is > than certain thresholds
+     * @return
+     */
+    @Override
+    public int betAmount() {
+        double handConfidence = calculateHandConfidence();
+        //if the hand is good enough then raise
+        if( handConfidence > raiseThreshold){
+            return (int)((handConfidence) * (1000/2));
+        }
+        //if the hand is really good then go all in if its the last betting round
+        else if(handConfidence > allInThreshold && availableCards.length == 7){
+            return chipTotal;
+        }
+        //otherwise just check
+        else{
+            return 0;
+        }
+
+    }
+
+
+    /**
+     * sets the raise amount based on the hand confidence.
+     * @return
+     */
+    @Override
+    public int raiseAmount() {
+        double handConfidence = calculateHandConfidence();
+        int raise = (int)(1000 * handConfidence);
+        //otherwise just raise by the raise amount
+        return raise;
+    }
+
+
 
 
 
@@ -275,9 +279,11 @@ public class OptimalBot extends pokerPlayer {
         //debugWrite("beau says hands played " + handNum);
     }
 
+    // rank how good the hole cards are, i ended up not needing to use this
     public double rankHoleCards(List<String[]>holeCards){
         double holeRank = 0;
         double[] ranks = new double[ holeCards.size() ];
+        String[] suits = new String[ holeCards.size() ];
         int i = 0;
         for (  String[] card : holeCards) {
             switch ( card[ Deck.RANK ] ) {
@@ -289,12 +295,28 @@ public class OptimalBot extends pokerPlayer {
                 default:
                     ranks[i] = Integer.parseInt( card[ Deck.RANK ] );
             }
+            switch (card[ Deck.SUIT]){
+                case "D":
+                case "H":
+                case "S":
+                case "C":
+                    suits[i] = card[Deck.SUIT];
+                    break;
+                default:
+                    System.out.println("Invalid suit on hole cards");
+
+            }
             holeRank = holeRank + (ranks[i]/100);
             i++;
         }
         //add 1 if it is a pair
         if(ranks[0] == ranks[1]){
             holeRank = holeRank + 1;
+        }
+        //if the suits are the same then add 0.25 since the value of having 2 of the same suit is substantial but 0.25 keeps the hole cards in the same rank.
+        // (hole rank can only exceed 1 if the ranks are the same)
+        if(suits[0] == suits[1]){
+            holeRank = holeRank + 0.25;
         }
 
         return holeRank;
@@ -341,8 +363,34 @@ public class OptimalBot extends pokerPlayer {
     }
 
     /**
-     * initializes opponents by getting the names and using them to add Opponent instances to the opponents array list
-     * also initializes the bot by changing "is alive" to true if the players list contains the name of the bot
+     * gets the players aggressiveness which affects how high the threshold should be. The player aggressivness is based on the position the player is in
+     * and how good the pot odds are.
+     * @param positionWeight
+     * @param potOddsWeight
+     */
+    public void SetPlayerAggressiveness(int positionWeight, int potOddsWeight, double raiseFactor) {
+        //gets the position aggressiveness factor. We need to divide by 10 so that the number is not too large
+        //the higher the number, the less aggressive the bot will be so if the bot is position 6/6 the factor will be 0.1 since (6/6)/10 = 0.1
+        double positionalAggressivenessFactor = (((double) playersAtTable.size() / (double) tablePosition) / 10) / positionWeight;
+        double potOddsAggressivenessFactor;
+        if (currentPot > 0) {
+            potOddsAggressivenessFactor = ((double) currentBetAmount / (double) currentPot) / potOddsWeight;
+        } else {
+            potOddsAggressivenessFactor = 1;
+        }
+        System.out.println(positionalAggressivenessFactor + potOddsAggressivenessFactor);
+        callThreshold = (callThreshold + (positionalAggressivenessFactor * potOddsAggressivenessFactor));
+        raiseThreshold = callThreshold * raiseFactor;
+        System.out.println(callThreshold);
+        System.out.println(raiseThreshold);
+    }
+
+    /**
+     *loops through the players that have been seated at the game adding each player to the players at table arraylist.
+     *
+     * when the player's name is equal to my bot's name then my bot is considered "Alive".
+     *
+     * The players table position is also set here.
      * @param matcher regex matcher from testing the notification
      */
     public void initPlayers(Matcher matcher){
@@ -355,13 +403,12 @@ public class OptimalBot extends pokerPlayer {
             String playerName = removeDot(playerNameRaw.trim());
             debugWrite(playerName);
             if(playerName.equals(name)){
-                opponents.add(new Opponent(playerName));
-            }
-            else{
                 isAlive = true;
             }
-
+            playersAtTable.add(playerName);
         }
+        //i want the table position to start at 1 so that i can properly divide by how many players are at the table to affect the player aggressiveness
+        tablePosition = playersAtTable.indexOf(name) + 1;
         //debugWrite("BEAU SAYS: " + group1);
     }
 
@@ -377,19 +424,6 @@ public class OptimalBot extends pokerPlayer {
         return msg;
     }
 
-    /**
-     * updates the data for an opponent. Keeps track of folds, calls, and raises
-     * @param opponentName
-     * @param action
-     */
-    public void updateOpponentAction(String opponentName, String action){
-        for(Opponent opponent : opponents){
-            if(opponent.getName().equals(opponentName)){
-                opponent.increment(action);
-                break;
-            }
-        }
-    }
 
     /**
      * method to determine if the program should call, raise, etc
@@ -426,7 +460,7 @@ public class OptimalBot extends pokerPlayer {
     }
 
     /**
-     * returns the bots hand. The bot ignores less optimal hands and returns the best hand the bot has.
+     * returns the bots hand. The bot ignores less optimal hands and returns the best hand the bot has from the available cards.
      *
      * @param availableCards river cards + hole cards. Range can be 5-7
      * @return
@@ -435,6 +469,7 @@ public class OptimalBot extends pokerPlayer {
         String[][] bestHand = new String[5][2];
         String[][] testHand = new  String[5][2];
         double bestHandRank = 0.0;
+        //get the best hand out of the available cards
         for( int i = 0; i < availableCards.length; i++ ) {
             testHand[0] = availableCards[i];
             for ( int j = i+1; j < availableCards.length; j++ ) {
@@ -451,12 +486,12 @@ public class OptimalBot extends pokerPlayer {
                                 bestHandRank = testRank;
                                 bestHand = Arrays.copyOf( testHand, testHand.length );
                             }
-                        }//m
-                    }//l
-                }//k
-            }//j
-            // combinations.add( combo );
-        }//i
+                        }
+                    }
+                }
+            }
+
+        }
 
         return bestHand;
 
@@ -471,7 +506,7 @@ public class OptimalBot extends pokerPlayer {
         double handRank = getHandRank(currentHand.clone());
         double handRatio = handRank /getHandRank(getBestHand());
         double improvementProba = handImprovementProba();
-        double handConfidence = handRatio + (improvementProba/2);
+        double handConfidence = handRatio + (improvementProba/3);
         return handConfidence;
 
     }
@@ -616,67 +651,7 @@ public class OptimalBot extends pokerPlayer {
         else{
             return 0;
         }
-
     }
-
-
-    private class Opponent{
-        private int id;
-        private String name;
-        private int foldCount = 0;
-        private int callCount = 0;
-        private int raiseCount = 0;
-        private int tablePosition;
-        private String lastAction;
-
-
-        public Opponent(String name){
-            this.name = name;
-        }
-
-        public void increment(String action){
-            lastAction = action;
-            switch(action){
-                case "f":
-                    foldCount++;
-                    //debugWrite("Incremented " + getName() + "'s fold count to " + foldCount);
-                    break;
-                case "c":
-                    callCount++;
-                    //debugWrite("Incremented " + getName() + "'s call count to " + callCount);
-                    break;
-                case "r":
-                    raiseCount++;
-                    //debugWrite("Incremented " + getName() + "'s raise count to " + raiseCount);
-                    callCount++;
-                    //debugWrite("Incremented " + getName() + "'s call count to " + callCount);
-                    break;
-                default:
-                    debugWrite("invalid action to increment");
-            }
-        }
-        public String getName(){
-            return this.name;
-        }
-        public int getFoldCount(){
-            return this.foldCount;
-        }
-        public int getCallCount(){
-            return this.callCount;
-        }
-        public int getRaiseCount(){
-            return this.raiseCount;
-        }
-
-        public double getRaiseRate(){
-            double raiseRate = this.raiseCount / this.callCount;
-            return raiseRate;
-        }
-
-
-    }
-
-
 }
 
 
