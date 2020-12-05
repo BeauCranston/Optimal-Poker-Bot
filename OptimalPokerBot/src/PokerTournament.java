@@ -49,9 +49,9 @@ public class PokerTournament {
 
         players.add( new OptimalBot( "Your bot", stake ) );
         players.add( new randBot( "Randy McRandom", stake ) );
-        players.add( new foldBot( "Fearless Folder", stake ) );
-        players.add( new callBot( "Casual Caller", stake ) );
-        players.add( new maxBetBot( "Maxine McMaxBet", stake ) );
+//        players.add( new foldBot( "Fearless Folder", stake ) );
+//        players.add( new callBot( "Casual Caller", stake ) );
+//        players.add( new maxBetBot( "Maxine McMaxBet", stake ) );
 
         // subscribe players to the dealer's announcements
         players.stream().forEach((player) -> { dealer.addListener( player ); });

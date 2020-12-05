@@ -28,7 +28,7 @@ public class OptimalBot extends pokerPlayer {
     //default raise is just the call threshold * 1.5
     private double raiseThreshold = 0.14 * 1.5;
     //start with a call rate of 0.14 since that is the value of having a high card
-    private double callThreshold = 0.14;
+    private double callThreshold = 0.1;
     private double allInThreshold = 0.8;
     private int handsPlayed;
     private ArrayList<String>playersAtTable = new ArrayList<>();
@@ -46,6 +46,8 @@ public class OptimalBot extends pokerPlayer {
         flop,
         river,
         potUpdate,
+        potUpdateByCall,
+        potUpdateByRaise,
         betAmountUpdate,
         playerBusted,
         Invalid
@@ -64,11 +66,14 @@ public class OptimalBot extends pokerPlayer {
     Pattern flopPat = Pattern.compile( "^.*Dealer shows (.)(.) (.)(.) (.)(.).*$", Pattern.DOTALL );
     Pattern riverTurnPat = Pattern.compile( "^.*Dealer shows (.)(.).*$", Pattern.DOTALL );
     Pattern potUpdatePat = Pattern.compile("^.*As a result of betting, the pot is now (\\d*)\\.*$", Pattern.DOTALL);
+    Pattern updatePotByCall = Pattern.compile("^.* calls (\\d*) \\.\\.\\. $");
+    Pattern updatePotByRaise = Pattern.compile("^.* has called (\\d*) and raised by (\\d*)\\.$");
     Pattern betAmountUpdatePat = Pattern.compile("^.*The bet is (\\d+) to (.*)\\.$");
     Pattern playerBustedPat = Pattern.compile("^(.*) has busted at hand (\\d*) and must leave the table\\.$");
 
+
     //order of this arraylist is also important since the riverTurn pattern technically matches the flop pattern but not vice versa
-    ArrayList<Pattern> dealerAnnouncements = new ArrayList(Arrays.asList(initializePat, initPlayersPat, startPat, flopPat, riverTurnPat, potUpdatePat, betAmountUpdatePat, playerBustedPat));
+    ArrayList<Pattern> dealerAnnouncements = new ArrayList(Arrays.asList(initializePat, initPlayersPat, startPat, flopPat, riverTurnPat, potUpdatePat, updatePotByCall, updatePotByRaise,betAmountUpdatePat, playerBustedPat));
 
     public OptimalBot() {
         super( "Uninitialized", 0 );
@@ -132,7 +137,7 @@ public class OptimalBot extends pokerPlayer {
                 break;
             case start:
                 //clears the hand
-                System.out.println("starting hand!!!!!!!!!!!!!!!!!!!!!!!");
+                debugWrite("starting hand!!!!!!!!!!!!!!!!!!!!!!!");
                 clearHand(Integer.parseInt(matcher.group(1)));
                 break;
             case flop:
@@ -141,6 +146,16 @@ public class OptimalBot extends pokerPlayer {
                 break;
             case potUpdate:
                 updatePot(Integer.parseInt(matcher.group(1)));
+                break;
+            case potUpdateByCall:
+                int update = Integer.parseInt(matcher.group(1));
+                int newPot = currentPot + update;
+                updatePot(newPot);
+                break;
+            case potUpdateByRaise:
+                 update = Integer.parseInt(matcher.group(1)) + Integer.parseInt(matcher.group(1));
+                 newPot = currentPot + update;
+                updatePot(newPot);
                 break;
             case betAmountUpdate:
                 updateCurrentBet(Integer.parseInt(matcher.group(1)));
@@ -156,24 +171,23 @@ public class OptimalBot extends pokerPlayer {
 
         }
     }
-    
+
     @Override
     public String chooseAction(List<String> actions) {
         int count = 0;
-        for(String string : actions){
-
-            System.out.println(actions.get(count));
-            count++;
-        }
         SetPlayerAggressiveness(3,3, 1.5);
         if(actions.contains("call") && actions.contains("raise")){
             if(actions.contains("fold")){
                 //if fold is included
-                return getOptimalAction(new String[]{"raise", "call"}, true);
+                String action = getOptimalAction(new String[]{"raise", "call"}, true);
+                debugWrite("action is: " + action);
+                return action;
             }
             else{
                 //if fold is not included
-                return getOptimalAction(new String[]{"raise", "call"}, false);
+                String action = getOptimalAction(new String[]{"raise", "call"}, false);
+                debugWrite("action is: " + action);
+                return action;
             }
 
         }
@@ -189,7 +203,7 @@ public class OptimalBot extends pokerPlayer {
             }
         }
         else{
-            System.out.println("either unconsidered state, or invalid");
+            debugWrite("either unconsidered state, or invalid");
             return "fold";
         }
 
@@ -204,6 +218,7 @@ public class OptimalBot extends pokerPlayer {
     public String getOptimalAction(String[]actions, boolean foldIncluded){
         if(currentHand != null){
             double handConfidence = calculateHandConfidence();
+            System.out.println("hand confidence: " + handConfidence + " raise thresh: " + raiseThreshold + " call thresh: " + callThreshold);
             //if the hand is good enough to raise then it's also good enough to bet on
             if(handConfidence > raiseThreshold){
                 return actions[0];
@@ -217,14 +232,15 @@ public class OptimalBot extends pokerPlayer {
                     return actions[1];
                 }
                 else{
-                    return "fold";
+                    return "call";
                 }
             }
         }
         //pre flop
         else{
+            System.out.println("hole cards rank: " + rankHoleCards(holeCards));
             //i dont want to bet on preflop unless if the bet is relatively small
-            if(currentBetAmount < 200){
+            if(currentBetAmount < 200 || rankHoleCards(holeCards) > 1){
                 return actions[1];
             }
             else{
@@ -303,7 +319,7 @@ public class OptimalBot extends pokerPlayer {
                     suits[i] = card[Deck.SUIT];
                     break;
                 default:
-                    System.out.println("Invalid suit on hole cards");
+                    debugWrite("Invalid suit on hole cards");
 
             }
             holeRank = holeRank + (ranks[i]/100);
@@ -347,8 +363,8 @@ public class OptimalBot extends pokerPlayer {
         double hc = calculateHandConfidence();
         double ratio = currentHandRank/bestHandRank;
         double handImprovementProba = handImprovementProba();
-        System.out.println("hand confidence: " + hc + " HIP: " + handImprovementProba + " ratio: " + ratio);
-        System.out.println("hand rank: " + currentHandRank + " best rank: " + bestHandRank);
+        debugWrite("hand confidence: " + hc + " HIP: " + handImprovementProba + " ratio: " + ratio);
+        debugWrite("hand rank: " + currentHandRank + " best rank: " + bestHandRank);
     }
 
     public void updatePot(int potUpdate){
@@ -378,11 +394,11 @@ public class OptimalBot extends pokerPlayer {
         } else {
             potOddsAggressivenessFactor = 1;
         }
-        System.out.println(positionalAggressivenessFactor + potOddsAggressivenessFactor);
+        debugWrite(String.valueOf(positionalAggressivenessFactor + potOddsAggressivenessFactor));
         callThreshold = (callThreshold + (positionalAggressivenessFactor * potOddsAggressivenessFactor));
         raiseThreshold = callThreshold * raiseFactor;
-        System.out.println(callThreshold);
-        System.out.println(raiseThreshold);
+        debugWrite(String.valueOf(callThreshold));
+        debugWrite(String.valueOf(raiseThreshold));
     }
 
     /**
@@ -480,7 +496,7 @@ public class OptimalBot extends pokerPlayer {
                         testHand[3] = availableCards[l];
                         for (int m = l+1; m < availableCards.length; m++ ) {
                             testHand[4] = availableCards[m];
-                            //System.out.println(Arrays.toString(testHand));
+                            //debugWrite(Arrays.toString(testHand));
                             double testRank = pokerDealer.rankHand( testHand, false );
                             if ( testRank > bestHandRank ) {
                                 bestHandRank = testRank;
