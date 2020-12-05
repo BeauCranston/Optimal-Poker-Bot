@@ -18,7 +18,7 @@ is still in the game so it will call rand.nextInt(0) which will produce an Illeg
 
 public class OptimalBot extends pokerPlayer {
     private int tablePosition;
-    private boolean debug = true;
+    private boolean debug = false;
     //th rate in which it raises when it calls or bets when the call is 0
     private double raiseThreshold = 0.5;
     private double callThreshold = 0.3;
@@ -97,12 +97,6 @@ public class OptimalBot extends pokerPlayer {
         double handRank;
         double handConfidence;
         int count = 0;
-        for(String string : actions){
-
-            System.out.println(actions.get(count));
-            count++;
-        }
-
         if(actions.contains("call") && actions.contains("raise")){
            return getOptimalAction(new String[]{"raise", "call"}, false);
 
@@ -112,7 +106,7 @@ public class OptimalBot extends pokerPlayer {
 
         }
         else{
-            System.out.println("either unconsidered state, or invalid");
+            debugWrite("either unconsidered state, or invalid");
             return "fold";
         }
 
@@ -231,7 +225,7 @@ public class OptimalBot extends pokerPlayer {
                 break;
             case start:
                 //clears the hand
-                System.out.println("starting hand!!!!!!!!!!!!!!!!!!!!!!!");
+                debugWrite("starting hand!!!!!!!!!!!!!!!!!!!!!!!");
                 clearHand(Integer.parseInt(matcher.group(1)));
                 break;
             case flop:
@@ -325,8 +319,8 @@ public class OptimalBot extends pokerPlayer {
         double hc = calculateHandConfidence();
         double ratio = currentHandRank/bestHandRank;
         double handImprovementProba = handImprovementProba();
-        System.out.println("hand confidence: " + hc + " HIP: " + handImprovementProba + " ratio: " + ratio);
-        System.out.println("hand rank: " + currentHandRank + " best rank: " + bestHandRank);
+        //debugWrite("hand confidence: " + hc + " HIP: " + handImprovementProba + " ratio: " + ratio);
+        //debugWrite("hand rank: " + currentHandRank + " best rank: " + bestHandRank);
     }
 
     public void updatePot(int potUpdate){
@@ -445,7 +439,7 @@ public class OptimalBot extends pokerPlayer {
                         testHand[3] = availableCards[l];
                         for (int m = l+1; m < availableCards.length; m++ ) {
                             testHand[4] = availableCards[m];
-                            //System.out.println(Arrays.toString(testHand));
+                            //debugWrite(Arrays.toString(testHand));
                             double testRank = pokerDealer.rankHand( testHand, false );
                             if ( testRank > bestHandRank ) {
                                 bestHandRank = testRank;

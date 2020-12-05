@@ -73,7 +73,7 @@ public abstract class pokerPlayer implements DealerListener {
         cardsAvailable[1] = (String[])(holeCards.toArray())[1];
         
         String[][] tc = tableCards.toArray(new String[0][0]);
-        System.out.println(tableCards.size());
+        //System.out.println(tableCards.size());
         int a = 2;
         for ( String[] c : tc ) {
             cardsAvailable[a++] = c;

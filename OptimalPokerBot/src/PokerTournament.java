@@ -22,6 +22,7 @@ public class PokerTournament {
     enum Phases { ANTE, BURN, HOLE, FLOP, TURN, RIVER, BET, REVEAL }
     public static double wins = 0;
     public static double runs = 0;
+
     public static String winner;
     public static void debugWrite( String str ) {
         if ( debug == true ) {
@@ -30,7 +31,7 @@ public class PokerTournament {
         }
     }
     static{
-        for(int i = 0; i < 1000; i++){
+        for(int i = 0; i < 100; i++){
             runs++;
             main(new String[]{"hello"});
 
@@ -563,7 +564,7 @@ public class PokerTournament {
             liveOrbit = liveGameCheck( playerStatus ) && !showdownCheck( playerStatus ) && !allDoneBetting;
 
         }
-        System.out.println("");
+        debugWrite("");
     }
 
     public static boolean liveGameCheck( String[] statuses ) {
