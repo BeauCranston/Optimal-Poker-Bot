@@ -139,7 +139,7 @@ public class OptimalBot extends pokerPlayer {
                 return actions[0];
             }
             else{
-                if(currentBetAmount < 200){
+                if(currentBetAmount < 500){
                     return actions[1];
                 }
                 else{
