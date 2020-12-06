@@ -136,9 +136,9 @@ public class OptimalBot extends pokerPlayer {
                 initPlayers(matcher);
                 break;
             case start:
-                //clears the hand
+                //clears the hand and sets initial pot to 150 for the big blind + small blind
                 debugWrite("starting hand!!!!!!!!!!!!!!!!!!!!!!!");
-                clearHand(Integer.parseInt(matcher.group(1)));
+                setInitValues();
                 break;
             case flop:
             case river:
@@ -148,12 +148,15 @@ public class OptimalBot extends pokerPlayer {
                 updatePot(Integer.parseInt(matcher.group(1)));
                 break;
             case potUpdateByCall:
+                debugWrite("updating pot by call");
                 int update = Integer.parseInt(matcher.group(1));
                 int newPot = currentPot + update;
                 updatePot(newPot);
+
                 break;
             case potUpdateByRaise:
-                 update = Integer.parseInt(matcher.group(1)) + Integer.parseInt(matcher.group(1));
+                debugWrite("updating pot by raise");
+                 update = Integer.parseInt(matcher.group(1)) + Integer.parseInt(matcher.group(2));
                  newPot = currentPot + update;
                 updatePot(newPot);
                 break;
@@ -175,37 +178,130 @@ public class OptimalBot extends pokerPlayer {
     @Override
     public String chooseAction(List<String> actions) {
         int count = 0;
+        boolean shouldFold = false;
+        boolean shouldCall = false;
+        boolean shouldRaise = false;
         SetPlayerAggressiveness(3,3, 1.5);
-        if(actions.contains("call") && actions.contains("raise")){
-            if(actions.contains("fold")){
-                //if fold is included
-                String action = getOptimalAction(new String[]{"raise", "call"}, true);
-                debugWrite("action is: " + action);
-                return action;
+        for(String string : actions){
+            debugWrite(string);
+        }
+        if(actions.contains("call")){
+
+            //post flop
+            if(currentHand != null){
+                double handConfidence = calculateHandConfidence();
+                if(handConfidence > callThreshold){
+                    shouldCall = true;
+                }
+            }
+            //pre flop
+            else{
+                if(currentBetAmount < 200){
+                    shouldCall = true;
+                }
+            }
+        }
+        if(actions.contains("raise")){
+            //post flop
+            if(currentHand != null){
+                double handConfidence = calculateHandConfidence();
+                if(handConfidence >  raiseThreshold){
+                    shouldRaise = true;
+                }
             }
             else{
-                //if fold is not included
-                String action = getOptimalAction(new String[]{"raise", "call"}, false);
-                debugWrite("action is: " + action);
-                return action;
+                //the reason why we raise if holecard rank is > than 40 is because this says that we either have high cards in the same suit or that we have a pair
+                if(rankHoleCards(holeCards) > 0.53){
+                    shouldRaise = true;
+                }
+
             }
 
         }
-        //determine whether to muck or show
-        else if(actions.contains("muck") && actions.contains("show")){
-            double handRank = getHandRank(currentHand);
-            //if the hand is good show it, otherwise don't show the hand
-            if(handRank > 1 ){
-                return "show";
+        if(actions.contains("fold")){
+            if(currentHand != null){
+                double handConfidence = calculateHandConfidence();
+                if(handConfidence < callThreshold){
+                    shouldFold = true;
+                }
             }
             else{
-                return "muck";
+                if(rankHoleCards(holeCards) < 0.53 && currentBetAmount > 200){
+                    shouldFold = true;
+                }
             }
         }
-        else{
-            debugWrite("either unconsidered state, or invalid");
+        if(actions.contains("bet") && actions.contains("check") ){
+            if(calculateHandConfidence() > raiseThreshold){
+                return "bet";
+            }
+            else{
+                return "check";
+            }
+        }
+
+        if(shouldCall && shouldRaise){
+            debugWrite("my bot raised");
+            return "raise";
+        }
+        else if(shouldRaise && shouldFold){
+            debugWrite("my bot folded");
             return "fold";
         }
+        else if(shouldCall && shouldFold){
+            debugWrite("my bot folded");
+            return "fold";
+        }
+        else if(shouldRaise){
+            debugWrite("my bot raised");
+            return "raise";
+        }
+        else if(shouldCall){
+            debugWrite("my bot called");
+            return "call";
+        }
+        else if(shouldFold){
+            debugWrite("my bot folded");
+            return "fold";
+        }
+        else if(actions.contains("call") || actions.contains("raise") && !actions.contains("fold")){
+            return "call";
+        }
+        else{
+            debugWrite("invlaid action!!!!");
+             return "poopy";
+        }
+
+//        if(actions.contains("call") && actions.contains("raise")){
+//            if(actions.contains("fold")){
+//                //if fold is included
+//                String action = getOptimalAction(new String[]{"raise", "call"}, true);
+//                debugWrite("action is: " + action);
+//                return action;
+//            }
+//            else{
+//                //if fold is not included
+//                String action = getOptimalAction(new String[]{"raise", "call"}, false);
+//                debugWrite("action is: " + action);
+//                return action;
+//            }
+//
+//        }
+//        //determine whether to muck or show
+//        else if(actions.contains("muck") && actions.contains("show")){
+//            double handRank = getHandRank(currentHand);
+//            //if the hand is good show it, otherwise don't show the hand
+//            if(handRank > 1 ){
+//                return "show";
+//            }
+//            else{
+//                return "muck";
+//            }
+//        }
+//        else{
+//            debugWrite("either unconsidered state, or invalid");
+//            return "fold";
+//        }
 
     }
 
@@ -218,7 +314,7 @@ public class OptimalBot extends pokerPlayer {
     public String getOptimalAction(String[]actions, boolean foldIncluded){
         if(currentHand != null){
             double handConfidence = calculateHandConfidence();
-            System.out.println("hand confidence: " + handConfidence + " raise thresh: " + raiseThreshold + " call thresh: " + callThreshold);
+            debugWrite("hand confidence: " + handConfidence + " raise thresh: " + raiseThreshold + " call thresh: " + callThreshold);
             //if the hand is good enough to raise then it's also good enough to bet on
             if(handConfidence > raiseThreshold){
                 return actions[0];
@@ -238,7 +334,7 @@ public class OptimalBot extends pokerPlayer {
         }
         //pre flop
         else{
-            System.out.println("hole cards rank: " + rankHoleCards(holeCards));
+            debugWrite("hole cards rank: " + rankHoleCards(holeCards));
             //i dont want to bet on preflop unless if the bet is relatively small
             if(currentBetAmount < 200 || rankHoleCards(holeCards) > 1){
                 return actions[1];
@@ -278,20 +374,27 @@ public class OptimalBot extends pokerPlayer {
      */
     @Override
     public int raiseAmount() {
-        double handConfidence = calculateHandConfidence();
-        int raise = (int)(1000 * handConfidence);
-        //otherwise just raise by the raise amount
-        return raise;
+        if(currentHand != null){
+            double handConfidence = calculateHandConfidence();
+            int raise = (int)(1000 * handConfidence);
+            //otherwise just raise by the raise amount
+            return raise;
+        }
+        else{
+            return 200;
+        }
+
     }
 
 
-
-
-
-    public void clearHand(int handNum){
+    /**
+     * sets the initial values includign the hands, table cards, and the current pot
+     */
+    public void setInitValues(){
         this.holeCards.clear();
         this.tableCards.clear();
         currentHand = null;
+        currentPot = 150;
         //debugWrite("beau says hands played " + handNum);
     }
 
@@ -369,6 +472,7 @@ public class OptimalBot extends pokerPlayer {
 
     public void updatePot(int potUpdate){
         currentPot = potUpdate;
+        debugWrite("pot is now: " + currentPot);
         //debugWrite("Beau says CURRENT POT IS: " + currentPot);
 
     }
@@ -390,15 +494,16 @@ public class OptimalBot extends pokerPlayer {
         double positionalAggressivenessFactor = (((double) playersAtTable.size() / (double) tablePosition) / 10) / positionWeight;
         double potOddsAggressivenessFactor;
         if (currentPot > 0) {
-            potOddsAggressivenessFactor = ((double) currentBetAmount / (double) currentPot) / potOddsWeight;
+            potOddsAggressivenessFactor = ((double) currentBetAmount / ((double) currentPot)) / potOddsWeight;
         } else {
             potOddsAggressivenessFactor = 1;
         }
-        debugWrite(String.valueOf(positionalAggressivenessFactor + potOddsAggressivenessFactor));
+        debugWrite("current pot is: " + currentPot);
+        debugWrite("positional factor: " + positionalAggressivenessFactor + " pot odds factor: " + potOddsAggressivenessFactor);
         callThreshold = (callThreshold + (positionalAggressivenessFactor * potOddsAggressivenessFactor));
         raiseThreshold = callThreshold * raiseFactor;
-        debugWrite(String.valueOf(callThreshold));
-        debugWrite(String.valueOf(raiseThreshold));
+        debugWrite("call thresh: " + callThreshold + " raise thresh: " + raiseThreshold);
+
     }
 
     /**
