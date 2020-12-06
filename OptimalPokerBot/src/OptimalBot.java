@@ -149,6 +149,7 @@ public class OptimalBot extends pokerPlayer {
                 break;
             case potUpdateByCall:
                 debugWrite("updating pot by call");
+                //update the pot with the new bets
                 int update = Integer.parseInt(matcher.group(1));
                 int newPot = currentPot + update;
                 updatePot(newPot);
@@ -156,6 +157,7 @@ public class OptimalBot extends pokerPlayer {
                 break;
             case potUpdateByRaise:
                 debugWrite("updating pot by raise");
+                //update the pot with the new bets
                  update = Integer.parseInt(matcher.group(1)) + Integer.parseInt(matcher.group(2));
                  newPot = currentPot + update;
                 updatePot(newPot);
@@ -181,14 +183,16 @@ public class OptimalBot extends pokerPlayer {
         boolean shouldFold = false;
         boolean shouldCall = false;
         boolean shouldRaise = false;
+        //sets how aggressive the player should be and adjusts how much the factors are weighed. The lower the weight the higher the impact
         SetPlayerAggressiveness(3,3, 1.5);
+        //write the actions
         for(String string : actions){
             debugWrite(string);
         }
         if(actions.contains("call")){
-
             //post flop
             if(currentHand != null){
+                //if the hand is good then call it
                 double handConfidence = calculateHandConfidence();
                 if(handConfidence > callThreshold){
                     shouldCall = true;
@@ -196,6 +200,7 @@ public class OptimalBot extends pokerPlayer {
             }
             //pre flop
             else{
+                //if pre flop and the best is under 200 then call
                 if(currentBetAmount < 200){
                     shouldCall = true;
                 }
@@ -204,37 +209,45 @@ public class OptimalBot extends pokerPlayer {
         if(actions.contains("raise")){
             //post flop
             if(currentHand != null){
+                //if the hand is really good then raise
                 double handConfidence = calculateHandConfidence();
                 if(handConfidence >  raiseThreshold){
                     shouldRaise = true;
                 }
             }
             else{
-                //the reason why we raise if holecard rank is > than 40 is because this says that we either have high cards in the same suit or that we have a pair
-                if(rankHoleCards(holeCards) > 0.53){
+                //the reason why we raise if holecard rank is > than 0.27 is because we account for having a king and an ace as well as any same suit hole card and any pair. These
+                //are the only situations in which we should raise pre flop
+                if(rankHoleCards(holeCards) >= 0.27){
                     shouldRaise = true;
                 }
 
             }
-
         }
+        //checks if we can fold
         if(actions.contains("fold")){
+            //post flop
             if(currentHand != null){
                 double handConfidence = calculateHandConfidence();
+                //if the hand is not so good then fold
                 if(handConfidence < callThreshold){
                     shouldFold = true;
                 }
             }
+            //pre flop
             else{
-                if(rankHoleCards(holeCards) < 0.53 && currentBetAmount > 200){
+                //if the hole cards are not very good and the current bet amount is over 200 then fold
+                if(rankHoleCards(holeCards) < 0.27 && currentBetAmount > 200){
                     shouldFold = true;
                 }
             }
         }
         if(actions.contains("bet") && actions.contains("check") ){
+            //if its a really good hand then bet
             if(calculateHandConfidence() > raiseThreshold){
                 return "bet";
             }
+            //otherwise check
             else{
                 return "check";
             }
@@ -268,81 +281,10 @@ public class OptimalBot extends pokerPlayer {
             return "call";
         }
         else{
-            debugWrite("invlaid action!!!!");
-             return "poopy";
+            debugWrite("invalid action!!!!");
+             return "invalid";
         }
 
-//        if(actions.contains("call") && actions.contains("raise")){
-//            if(actions.contains("fold")){
-//                //if fold is included
-//                String action = getOptimalAction(new String[]{"raise", "call"}, true);
-//                debugWrite("action is: " + action);
-//                return action;
-//            }
-//            else{
-//                //if fold is not included
-//                String action = getOptimalAction(new String[]{"raise", "call"}, false);
-//                debugWrite("action is: " + action);
-//                return action;
-//            }
-//
-//        }
-//        //determine whether to muck or show
-//        else if(actions.contains("muck") && actions.contains("show")){
-//            double handRank = getHandRank(currentHand);
-//            //if the hand is good show it, otherwise don't show the hand
-//            if(handRank > 1 ){
-//                return "show";
-//            }
-//            else{
-//                return "muck";
-//            }
-//        }
-//        else{
-//            debugWrite("either unconsidered state, or invalid");
-//            return "fold";
-//        }
-
-    }
-
-    /**
-     * finds the apporpriate action to take based on the curernt circumstances such as pot odds, position, hand confidence, and current bet.
-     * @param actions the actions i can take
-     * @param foldIncluded is fold included?
-     * @return the action my bot will take
-     */
-    public String getOptimalAction(String[]actions, boolean foldIncluded){
-        if(currentHand != null){
-            double handConfidence = calculateHandConfidence();
-            debugWrite("hand confidence: " + handConfidence + " raise thresh: " + raiseThreshold + " call thresh: " + callThreshold);
-            //if the hand is good enough to raise then it's also good enough to bet on
-            if(handConfidence > raiseThreshold){
-                return actions[0];
-            }
-            else if(foldIncluded && handConfidence < callThreshold){
-                return "fold";
-            }
-            else{
-                //good for when the hand is good enough to keep playing but better to get by without paying anything
-                if(handConfidence > callThreshold && handConfidence < raiseThreshold){
-                    return actions[1];
-                }
-                else{
-                    return "call";
-                }
-            }
-        }
-        //pre flop
-        else{
-            debugWrite("hole cards rank: " + rankHoleCards(holeCards));
-            //i dont want to bet on preflop unless if the bet is relatively small
-            if(currentBetAmount < 200 || rankHoleCards(holeCards) > 1){
-                return actions[1];
-            }
-            else{
-                return "fold";
-            }
-        }
     }
 
     /**
